@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  ocr-api:
+    build: .
+    container_name: egyptian_id_ocr
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./onnx:/app/onnx # Models outside image for hot-reload
+      - ./logs:/app/logs # Persist logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
