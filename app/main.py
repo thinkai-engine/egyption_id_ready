@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from inference import EgyptianIDOCR
+from src.inference import EgyptianIDOCR
 
 # ── Logging ───────────────────────────────────────────────────
 logging.basicConfig(

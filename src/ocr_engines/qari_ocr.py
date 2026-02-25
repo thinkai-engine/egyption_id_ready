@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-from gemini_ocr import FIELD_PROMPTS
+from .gemini_ocr import FIELD_PROMPTS
 
 LOW_QUALITY_SUFFIX = (
     "\nملاحظة: الصورة قد تكون غير واضحة. "

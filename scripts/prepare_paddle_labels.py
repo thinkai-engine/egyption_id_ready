@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import pandas as pd
-from text_cleaner import prepare_paddle_label
+from src.text_cleaner import prepare_paddle_label
 
 LABELED_CSV = ROOT / "crops_labeled.csv"
 OUTPUT = {

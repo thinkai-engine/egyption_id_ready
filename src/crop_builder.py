@@ -11,7 +11,7 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 
-from label_reader import parse_yolo_label, OCR_FIELDS
+from .label_reader import parse_yolo_label, OCR_FIELDS
 
 
 def crop_field(

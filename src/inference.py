@@ -13,7 +13,7 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 from dataclasses import dataclass, field as dc_field
 
-from field_detector import YOLOFieldDetector
+from .field_detector import YOLOFieldDetector
 
 
 @dataclass

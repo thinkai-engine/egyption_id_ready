@@ -16,7 +16,7 @@ import numpy as np
 
 
 def main():
-    from inference import EgyptianIDOCR
+    from src.inference import EgyptianIDOCR
 
     # ── Configuration ─────────────────────────────────────────
     REC_ONNX = ROOT / "onnx" / "rec_sim.onnx"

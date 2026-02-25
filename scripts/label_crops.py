@@ -96,11 +96,11 @@ def main():
     # ── Load engines ──────────────────────────────────────────
     engines = {}
     if args.method in ("qari", "both"):
-        from qari_ocr import QariOCR
+        from src.ocr_engines.qari_ocr import QariOCR
         engines["qari"] = QariOCR(use_4bit=args.use_4bit)
 
     if args.method in ("gemini", "both"):
-        from gemini_ocr import GeminiOCR
+        from src.ocr_engines.gemini_ocr import GeminiOCR
         if not args.gemini_key:
             print("❌ Gemini API key required! Use --gemini-key YOUR_KEY")
             return

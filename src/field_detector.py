@@ -7,7 +7,7 @@ Detect ID card fields using field_detector.onnx when no labels exist.
 import numpy as np
 import onnxruntime as ort
 
-from label_reader import get_field_name
+from .label_reader import get_field_name
 
 
 class YOLOFieldDetector:

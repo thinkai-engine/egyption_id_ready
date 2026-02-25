@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import pandas as pd
-from crop_builder import build_crops_from_split
+from src.crop_builder import build_crops_from_split
 
 # ── Configuration ─────────────────────────────────────────────
 SPLITS = {
@@ -30,7 +30,7 @@ detector = None
 YOLO_ONNX = ROOT / "model" / "field_detector.onnx"
 if YOLO_ONNX.exists():
     try:
-        from field_detector import YOLOFieldDetector
+        from src.field_detector import YOLOFieldDetector
         detector = YOLOFieldDetector(str(YOLO_ONNX))
     except Exception as e:
         print(f"⚠️  YOLO detector not loaded: {e}")
