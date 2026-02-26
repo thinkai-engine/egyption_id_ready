@@ -63,6 +63,7 @@ crops_metadata.csv
 crops_labeled.csv
 arabic_dict.txt
 rec/
+implementation_plan.md
 # ── Environment Variables ──────────────────────────
 .env
 .env.local
