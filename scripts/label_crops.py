@@ -4,6 +4,7 @@ Label Crops — Extract text from all cropped fields.
 Usage:
     python scripts/label_crops.py                         # default: qari
     python scripts/label_crops.py --method gemini
+    python scripts/label_crops.py --method bakri
     python scripts/label_crops.py --method both
 """
 
@@ -30,6 +31,9 @@ def extract_text(img_path, field, method, engines):
     elif method == "gemini":
         result["label_text"] = engines["gemini"].extract(str(img_path), field)
 
+    elif method == "bakri":
+        result["label_text"] = engines["bakri"].extract(str(img_path), field)
+
     elif method == "both":
         q = engines["qari"].extract(str(img_path), field)
         g = engines["gemini"].extract(str(img_path), field)
@@ -44,7 +48,7 @@ def extract_text(img_path, field, method, engines):
 def main():
     parser = argparse.ArgumentParser(description="Label crops with OCR")
     parser.add_argument(
-        "--method", choices=["qari", "gemini", "both"],
+        "--method", choices=["qari", "gemini", "bakri", "both"],
         default="qari", help="OCR engine to use"
     )
     parser.add_argument(
@@ -98,6 +102,10 @@ def main():
     if args.method in ("qari", "both"):
         from src.ocr_engines.qari_ocr import QariOCR
         engines["qari"] = QariOCR(use_4bit=args.use_4bit)
+
+    if args.method in ("bakri", "both"):
+        from src.ocr_engines.bakri_ocr import BakriOCR
+        engines["bakri"] = BakriOCR(use_4bit=args.use_4bit)
 
     if args.method in ("gemini", "both"):
         from src.ocr_engines.gemini_ocr import GeminiOCR

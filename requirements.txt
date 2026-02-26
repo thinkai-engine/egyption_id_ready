@@ -1,7 +1,7 @@
 # ── Core OCR & Vision ─────────────────────────────
 onnxruntime-gpu==1.19.0
-opencv-python-headless==4.10.0.84
-Pillow==10.4.0
+opencv-python-headless>=4.10.0
+Pillow>=10.0.0
 numpy==1.26.4
 
 # ── Arabic Text Processing ────────────────────────
@@ -20,11 +20,13 @@ python-multipart==0.0.9
 
 # ── OCR Engines ───────────────────────────────────
 google-generativeai==0.8.3
-transformers==4.46.0
-torch==2.5.0
-accelerate==1.0.0
+transformers>=4.57.0
+torch>=2.5.0
+accelerate>=1.0.0
+peft>=0.18.0
 qwen_vl_utils==0.0.8
-
+json-repair>=0.30.0
+bitsandbytes>=0.46.1
 # ── Training (PaddleOCR) ─────────────────────────
 paddlepaddle-gpu==2.6.2
 paddleocr==2.9.1
