@@ -22,24 +22,22 @@ class QariOCR:
     """
     Extract text using QARI-OCR VLM.
     Requires GPU for reasonable speed.
-    
-    Note: Qari-OCR is a PEFT/LoRA adapter on top of Qwen2-VL-2B-Instruct.
+
+    Note: Qari-OCR is a fine-tuned model (not a PEFT adapter) based on Qwen2-VL-2B-Instruct.
     """
 
     def __init__(
         self,
-        adapter_name: str = "NAMAA-Space/Qari-OCR-0.1-VL-2B-Instruct",
-        base_model_name: str = "Qwen/Qwen2-VL-2B-Instruct",
+        model_name: str = "NAMAA-Space/Qari-OCR-0.1-VL-2B-Instruct",
         use_4bit: bool = False,
         device: str = "auto",
     ):
         import torch
         from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
-        from peft import PeftModel
 
-        print(f"⏳ Loading base model {base_model_name} ...")
+        print(f"⏳ Loading QARI model {model_name} ...")
 
-        # Load base model
+        # Load model
         if use_4bit:
             from transformers import BitsAndBytesConfig
 
@@ -49,23 +47,19 @@ class QariOCR:
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
             )
-            base_model = Qwen2VLForConditionalGeneration.from_pretrained(
-                base_model_name,
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                model_name,
                 quantization_config=bnb_cfg,
                 device_map=device,
             )
         else:
-            base_model = Qwen2VLForConditionalGeneration.from_pretrained(
-                base_model_name,
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                model_name,
                 torch_dtype=torch.float16,
                 device_map=device,
             )
 
-        print(f"⏳ Loading QARI adapter {adapter_name} ...")
-        # Load PEFT adapter
-        self.model = PeftModel.from_pretrained(base_model, adapter_name)
-        
-        self.processor = AutoProcessor.from_pretrained(base_model_name)
+        self.processor = AutoProcessor.from_pretrained(model_name)
         self.device_name = str(next(self.model.parameters()).device)
         print(f"✅ QARI ready on: {self.device_name}")
 
