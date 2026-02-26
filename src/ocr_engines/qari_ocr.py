@@ -33,7 +33,7 @@ class QariOCR:
         device: str = "auto",
     ):
         import torch
-        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+        from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, Qwen2VLConfig
 
         print(f"⏳ Loading QARI model {model_name} ...")
 
@@ -53,8 +53,13 @@ class QariOCR:
                 device_map=device,
             )
         else:
+            # Load config without quantization (override if model has it)
+            config = Qwen2VLConfig.from_pretrained(model_name)
+            if hasattr(config, "quantization_config"):
+                config.quantization_config = None
             self.model = Qwen2VLForConditionalGeneration.from_pretrained(
                 model_name,
+                config=config,
                 torch_dtype=torch.float16,
                 device_map=device,
             )
