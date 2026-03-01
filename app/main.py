@@ -41,6 +41,11 @@ DET_ONNX = str(ROOT / "model" / "field_detector.onnx")
 REC_ONNX = str(ROOT / "onnx" / "rec_sim.onnx")
 DICT_PATH = str(ROOT / "arabic_dict.txt")
 
+# AirLLM post-processing settings
+ENABLE_POST_PROCESS = False  # Set to True to enable LLM correction
+POST_PROCESS_MODEL = "meta-llama/Llama-3-8B-Instruct"
+POST_PROCESS_4BIT = False
+
 
 # ── Lifespan ──────────────────────────────────────────────────
 @asynccontextmanager
@@ -51,6 +56,9 @@ async def lifespan(app: FastAPI):
         rec_onnx=REC_ONNX,
         dict_path=DICT_PATH,
         use_gpu=False,
+        post_process=ENABLE_POST_PROCESS,
+        post_process_model=POST_PROCESS_MODEL,
+        post_process_4bit=POST_PROCESS_4BIT,
     )
     logger.info("✅ Model ready")
     yield
@@ -214,6 +222,36 @@ async def ocr_batch(files: list[UploadFile] = File(...)):
         "success": sum(1 for r in results if r["status"] == "success"),
         "latency_ms": round(elapsed, 1),
         "results": results,
+    }
+
+
+@app.post("/ocr/correct")
+async def ocr_correct(
+    text: str = Query(..., description="OCR text to correct"),
+    field: str = Query(..., description="Field name for context"),
+    confidence: float = Query(0.5, description="Original OCR confidence"),
+):
+    """
+    Correct OCR text using LLM-based post-processing.
+    Requires ENABLE_POST_PROCESS=True in app/main.py
+    """
+    if not app.state.ocr.post_processor:
+        raise HTTPException(
+            503,
+            "Post-processor not enabled. Set ENABLE_POST_PROCESS=True"
+        )
+
+    t0 = time.perf_counter()
+    correction = app.state.ocr.post_processor.correct(text, field, confidence)
+    elapsed = (time.perf_counter() - t0) * 1000
+
+    return {
+        "original_text": correction.original_text,
+        "corrected_text": correction.corrected_text,
+        "was_corrected": correction.was_corrected,
+        "confidence": round(correction.confidence, 3),
+        "explanation": correction.explanation,
+        "latency_ms": round(elapsed, 1),
     }
 
 

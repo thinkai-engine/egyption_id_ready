@@ -1,0 +1,77 @@
+# AirLLM Configuration
+# ====================
+# Settings for large VLM inference using AirLLM layer-wise loading.
+# These models can run on 4GB GPU but with slower inference speed.
+# Best suited for offline labeling tasks, not real-time inference.
+
+# Model Selection
+# ---------------
+# Recommended models for different use cases:
+# 
+# High-Accuracy Labeling (offline):
+#   - Qwen/Qwen2-VL-72B-Instruct  (best for Arabic OCR labeling)
+#   - meta-llama/Llama-3-70B-Instruct
+#
+# Post-Processing Correction (faster):
+#   - meta-llama/Llama-3-8B-Instruct
+#   - mistralai/Mistral-7B-Instruct-v0.3
+#   - Qwen/Qwen2.5-7B-Instruct
+
+# Primary labeling model (for scripts/label_crops.py)
+AIRLLM_LABEL_MODEL: "Qwen/Qwen2-VL-72B-Instruct"
+
+# Post-processing correction model (for src/inference.py)
+AIRLLM_POSTPROCESS_MODEL: "meta-llama/Llama-3-8B-Instruct"
+
+# Cache directory for sharded model files
+# AirLLM will download and shard models here for faster loading
+AIRLLM_CACHE_DIR: "./model/airllm_cache"
+
+# Quantization Settings
+# ---------------------
+# 4-bit quantization reduces VRAM usage further but may slightly impact accuracy
+# Recommended for GPUs with <6GB VRAM
+AIRLLM_USE_4BIT: false
+
+# Performance Settings
+# --------------------
+# Layer-wise inference is inherently slow (10-30 sec/image for 72B models)
+# These settings help manage memory vs speed tradeoffs
+
+# Number of layers to keep in GPU memory at once (higher = faster, more VRAM)
+AIRLLM_LAYERS_PER_BATCH: 1
+
+# Maximum tokens to generate
+AIRLLM_MAX_NEW_TOKENS: 128
+
+# Repetition penalty (1.0 = no penalty, 1.2 = strong penalty)
+AIRLLM_REPETITION_PENALTY: 1.1
+
+# Usage Examples
+# --------------
+#
+# 1. Label crops with 72B model:
+#    python scripts/label_crops.py --method airllm \
+#      --airllm-model Qwen/Qwen2-VL-72B-Instruct \
+#      --airllm-cache ./model/airllm_cache
+#
+# 2. Label with 4-bit quantization (low VRAM):
+#    python scripts/label_crops.py --method airllm --use-4bit
+#
+# 3. Use in Python code:
+#    from src.ocr_engines.airllm_ocr import AirLLMOCR
+#    ocr = AirLLMOCR(
+#        model_name="Qwen/Qwen2-VL-72B-Instruct",
+#        use_4bit=False,
+#        cache_dir="./model/airllm_cache"
+#    )
+#    text = ocr.extract("crop.jpg", field_name="name")
+#
+# 4. Enable post-processing in inference:
+#    from src.inference import EgyptianIDOCR
+#    ocr = EgyptianIDOCR(
+#        post_process=True,
+#        post_process_model="meta-llama/Llama-3-8B-Instruct",
+#        post_process_4bit=False
+#    )
+#    results = ocr.extract("id_card.jpg")

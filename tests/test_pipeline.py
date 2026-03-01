@@ -199,6 +199,84 @@ class TestAPI:
         assert r.json()["status"] == "healthy"
 
 
+# ═══════════════════════════════════════════════════════════════
+#  AirLLM & Post-Processor Tests
+# ═══════════════════════════════════════════════════════════════
+class TestPostProcessor:
+
+    def test_post_processor_disabled_passthrough(self):
+        """When disabled, post-processor returns input unchanged."""
+        from src.post_processor import OCRPostProcessor
+
+        processor = OCRPostProcessor(enabled=False)
+        result = processor.correct("محمد", "name", 0.9)
+        
+        assert result.original_text == "محمد"
+        assert result.corrected_text == "محمد"
+        assert result.was_corrected is False
+
+    def test_post_processor_high_confidence_skip(self):
+        """High confidence text is not corrected."""
+        from src.post_processor import OCRPostProcessor
+
+        processor = OCRPostProcessor(enabled=True)
+        result = processor.correct("محمد", "name", 0.98)
+        
+        assert result.was_corrected is False
+        assert result.corrected_text == "محمد"
+
+    def test_validate_consistency_empty(self):
+        """Empty fields return valid with no issues."""
+        from src.post_processor import OCRPostProcessor
+
+        processor = OCRPostProcessor(enabled=False)
+        validation = processor.validate_consistency({})
+        
+        assert validation["valid"] is True
+        assert validation["issues"] == []
+
+    def test_national_id_governorate_mismatch(self):
+        """National ID governorate code conflicts with provided governorate."""
+        from src.post_processor import OCRPostProcessor
+
+        processor = OCRPostProcessor(enabled=True)
+        fields = {
+            "national_id": {"text": "29001011234567"},  # Cairo code 01
+            "governorate": {"text": "الإسكندرية"},  # Alexandria
+        }
+        validation = processor.validate_consistency(fields)
+        
+        # Should detect the mismatch
+        assert validation["valid"] is False
+        assert len(validation["issues"]) > 0
+
+
+class TestAirLLMOCR:
+
+    def test_airllm_import(self):
+        """AirLLMOCR module can be imported."""
+        from src.ocr_engines.airllm_ocr import AirLLMOCR
+        assert AirLLMOCR is not None
+
+    def test_airllm_fix_rtl(self):
+        """AirLLM RTL fix produces correct Arabic text."""
+        from src.ocr_engines.airllm_ocr import AirLLMOCR
+
+        # Mock instance for RTL test
+        processor = AirLLMOCR.__new__(AirLLMOCR)
+        text = "دمحم"  # "محمد" reversed
+        fixed = processor.fix_rtl(text)
+        assert fixed == "محمد"
+
+    def test_airllm_fix_rtl_empty(self):
+        """Empty text returns empty."""
+        from src.ocr_engines.airllm_ocr import AirLLMOCR
+
+        processor = AirLLMOCR.__new__(AirLLMOCR)
+        assert processor.fix_rtl("") == ""
+        assert processor.fix_rtl(None) == ""
+
+
 # ── Run ───────────────────────────────────────────────────────
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

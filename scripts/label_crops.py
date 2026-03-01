@@ -5,6 +5,7 @@ Usage:
     python scripts/label_crops.py                         # default: qari
     python scripts/label_crops.py --method gemini
     python scripts/label_crops.py --method bakri
+    python scripts/label_crops.py --method airllm         # AirLLM (72B model)
     python scripts/label_crops.py --method both
 """
 
@@ -34,6 +35,9 @@ def extract_text(img_path, field, method, engines):
     elif method == "bakri":
         result["label_text"] = engines["bakri"].extract(str(img_path), field)
 
+    elif method == "airllm":
+        result["label_text"] = engines["airllm"].extract(str(img_path), field)
+
     elif method == "both":
         q = engines["qari"].extract(str(img_path), field)
         g = engines["gemini"].extract(str(img_path), field)
@@ -48,7 +52,7 @@ def extract_text(img_path, field, method, engines):
 def main():
     parser = argparse.ArgumentParser(description="Label crops with OCR")
     parser.add_argument(
-        "--method", choices=["qari", "gemini", "bakri", "both"],
+        "--method", choices=["qari", "gemini", "bakri", "airllm", "both"],
         default="qari", help="OCR engine to use"
     )
     parser.add_argument(
@@ -61,6 +65,14 @@ def main():
     parser.add_argument(
         "--use-4bit", action="store_true",
         help="Use 4-bit quantization for QARI (saves VRAM)"
+    )
+    parser.add_argument(
+        "--airllm-model", default="Qwen/Qwen2-VL-72B-Instruct",
+        help="AirLLM model name or path (default: Qwen2-VL-72B-Instruct)"
+    )
+    parser.add_argument(
+        "--airllm-cache", default="./model/airllm_cache",
+        help="Cache directory for AirLLM sharded model"
     )
     args = parser.parse_args()
 
@@ -114,6 +126,14 @@ def main():
             return
         engines["gemini"] = GeminiOCR(api_key=args.gemini_key)
 
+    if args.method in ("airllm",):
+        from src.ocr_engines.airllm_ocr import AirLLMOCR
+        engines["airllm"] = AirLLMOCR(
+            model_name=args.airllm_model,
+            use_4bit=args.use_4bit,
+            cache_dir=args.airllm_cache,
+        )
+
     # ── Process ───────────────────────────────────────────────
     for idx, row in tqdm(subset.iterrows(), total=len(subset)):
         img_path = ROOT / row["image_path"]
@@ -138,9 +158,11 @@ def main():
         if idx % 50 == 0:
             df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
 
-        # Rate limit for Gemini
+        # Rate limit for Gemini and AirLLM (slower inference)
         if args.method in ("gemini", "both"):
             time.sleep(0.4)
+        elif args.method == "airllm":
+            time.sleep(0.1)  # Small delay for layer-wise inference
 
     # ── Final save ────────────────────────────────────────────
     df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")

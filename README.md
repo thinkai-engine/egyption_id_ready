@@ -11,11 +11,12 @@ ID Card Image → YOLO Detection → Field Cropping → PaddleOCR Recognition �
 ## ✨ Features
 
 - **GPU Acceleration**: 10x faster training with **checkpoint** support and resume capability
-- **Modular Architecture**: Clean, maintainable code with separated OCR engines (Gemini/QARI)
+- **Modular Architecture**: Clean, maintainable code with separated OCR engines (Gemini/QARI/AirLLM)
 - **Interactive Notebooks**: 3 Jupyter notebooks covering the complete pipeline from image cropping to training and evaluation
 - **Production Ready**: ~17ms per field using ONNX Runtime on CPU
 - **24 Supported Fields**: Name, National ID, Address, Governorate, Religion, Marital Status, Profession, and more
 - **Ready-to-Use API**: FastAPI with 5 endpoints + Docker deployment support
+- **AirLLM Integration**: Label with 72B parameter VLMs on 4GB GPU (offline labeling)
 
 ---
 
@@ -24,12 +25,13 @@ ID Card Image → YOLO Detection → Field Cropping → PaddleOCR Recognition �
 ```
 egyption_id_ready/
 ├── src/                    # Core source code
-│   ├── ocr_engines/        # OCR engines (Gemini & QARI)
+│   ├── ocr_engines/        # OCR engines (Gemini & QARI & AirLLM)
 │   ├── preprocessing.py    # Image processing and enhancement
 │   ├── label_reader.py     # YOLO labels reader (24 classes)
 │   ├── field_detector.py   # Field detection with ONNX
 │   ├── crop_builder.py     # Field cropping from images
 │   ├── text_cleaner.py     # Arabic text cleaning and RTL handling
+│   ├── post_processor.py   # LLM-based OCR correction (AirLLM)
 │   └── inference.py        # Final inference pipeline (ONNX)
 │
 ├── notebooks/              # Interactive Jupyter Notebooks
@@ -39,15 +41,18 @@ egyption_id_ready/
 │
 ├── scripts/                # Automation scripts
 │   ├── build_dataset.py    # Batch image processing and cropping
-│   ├── label_crops.py      # Automatic text extraction (Gemini/QARI)
+│   ├── label_crops.py      # Automatic text extraction (Gemini/QARI/AirLLM)
 │   ├── prepare_paddle_labels.py # Training data preparation
 │   ├── train.sh            # Training execution (PaddleOCR)
 │   └── export_onnx.sh      # Model export to ONNX
 │
 ├── configs/                # Model configurations (YAML)
+│   ├── egyptian_id_rec.yml # PaddleOCR training config
+│   └── airllm_config.yml   # AirLLM model settings
 ├── app/                    # API server (FastAPI)
 ├── tests/                  # Automated tests (15 tests)
 ├── model/                  # Model files (field_detector.onnx)
+├── model/airllm_cache/     # AirLLM sharded model cache
 └── onnx/                   # Exported ONNX OCR models
 ```
 
@@ -196,6 +201,8 @@ python -m pytest tests/ --cov=src --cov-report=html
 | **Validation** | Pydantic | Data validation and serialization |
 | **Alternative OCR** | QARI-OCR (Qwen2-VL-2B) | High-accuracy Arabic OCR |
 | **Alternative OCR** | Gemini Vision | Google's multimodal API |
+| **AirLLM Labeling** | Qwen2-VL-72B (AirLLM) | 72B VLM for offline labeling on 4GB GPU |
+| **Post-Processing** | Llama-3-8B (AirLLM) | LLM-based OCR error correction |
 
 ---
 
@@ -293,6 +300,52 @@ qari = QariOCR(use_4bit=True)  # Use if VRAM < 6GB
 # Standard loading
 qari = QariOCR(use_4bit=False)  # Recommended for 6GB+ VRAM
 ```
+
+### AirLLM Integration (72B Models on 4GB GPU)
+
+For high-accuracy offline labeling using large VLMs:
+
+```bash
+# Label crops with Qwen2-VL-72B (layer-wise inference)
+python scripts/label_crops.py --method airllm
+
+# With 4-bit quantization for low VRAM
+python scripts/label_crops.py --method airllm --use-4bit
+
+# Custom model and cache directory
+python scripts/label_crops.py --method airllm \
+  --airllm-model Qwen/Qwen2-VL-72B-Instruct \
+  --airllm-cache ./model/airllm_cache
+```
+
+**Python API:**
+```python
+from src.ocr_engines.airllm_ocr import AirLLMOCR
+
+# Load 72B model on 4GB GPU
+ocr = AirLLMOCR(
+    model_name="Qwen/Qwen2-VL-72B-Instruct",
+    use_4bit=False,
+    cache_dir="./model/airllm_cache"
+)
+
+# Extract text from cropped field
+text = ocr.extract("crop.jpg", field_name="name")
+```
+
+**Post-Processing Correction:**
+```python
+from src.inference import EgyptianIDOCR
+
+# Enable LLM-based error correction
+ocr = EgyptianIDOCR(
+    post_process=True,
+    post_process_model="meta-llama/Llama-3-8B-Instruct"
+)
+results = ocr.extract("id_card.jpg")
+```
+
+> **Note:** AirLLM inference is slow (10-30 sec/image for 72B models) — best for offline labeling, not real-time inference.
 
 ---
 

@@ -12,8 +12,10 @@ import onnxruntime as ort
 import arabic_reshaper
 from bidi.algorithm import get_display
 from dataclasses import dataclass, field as dc_field
+from typing import Optional
 
 from .field_detector import YOLOFieldDetector
+from .post_processor import OCRPostProcessor
 
 
 @dataclass
@@ -24,6 +26,8 @@ class OCRResult:
     valid: bool
     quality: str = ""
     issues: list = dc_field(default_factory=list)
+    original_text: str = ""  # Before post-processing
+    corrected: bool = False  # Was post-processing applied?
 
 
 class EgyptianIDOCR:
@@ -32,6 +36,10 @@ class EgyptianIDOCR:
 
     Detection  : field_detector.onnx  (YOLO)
     Recognition: rec_sim.onnx         (PaddleOCR fine-tuned)
+    
+    Optional Post-Processing:
+    - LLM-based error correction (AirLLM)
+    - Cross-field consistency validation
     """
 
     def __init__(
@@ -40,6 +48,9 @@ class EgyptianIDOCR:
         rec_onnx: str = "./onnx/rec_sim.onnx",
         dict_path: str = "./arabic_dict.txt",
         use_gpu: bool = False,
+        post_process: bool = False,
+        post_process_model: str = "meta-llama/Llama-3-8B-Instruct",
+        post_process_4bit: bool = False,
     ):
         providers = (
             ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -57,6 +68,16 @@ class EgyptianIDOCR:
         with open(dict_path, encoding="utf-8") as f:
             chars = f.read().strip().split("\n")
         self.chars = ["blank"] + chars
+
+        # Optional post-processor
+        self.post_processor = None
+        if post_process:
+            self.post_processor = OCRPostProcessor(
+                model_name=post_process_model,
+                use_4bit=post_process_4bit,
+                enabled=True,
+            )
+            print(f"✅ Post-processor enabled: {post_process_model}")
 
         print(
             f"✅ EgyptianIDOCR ready | "
@@ -96,12 +117,37 @@ class EgyptianIDOCR:
         return clean, avg_conf
 
     # ── Recognise one field ───────────────────────────────────
-    def recognize(self, crop: np.ndarray) -> tuple:
-        """Recognise text from a single cropped field image."""
+    def recognize(
+        self,
+        crop: np.ndarray,
+        field_name: str = None,
+        apply_post_process: bool = None,
+    ) -> tuple:
+        """
+        Recognise text from a single cropped field image.
+        
+        Args:
+            crop: Cropped field image
+            field_name: Optional field name for post-processing
+            apply_post_process: Override global post_process setting
+            
+        Returns:
+            Tuple of (text, confidence)
+        """
         inp = self._preprocess_rec(crop)
         name = self.rec_sess.get_inputs()[0].name
         pred = self.rec_sess.run(None, {name: inp})
-        return self._ctc_decode(pred[0])
+        text, conf = self._ctc_decode(pred[0])
+        
+        # Apply post-processing if enabled
+        should_post = apply_post_process if apply_post_process is not None else (self.post_processor is not None)
+        if should_post and self.post_processor is not None and field_name:
+            correction = self.post_processor.correct(text, field_name, conf)
+            if correction.was_corrected:
+                text = correction.corrected
+                conf = correction.confidence
+        
+        return text, conf
 
     # ── Validate fields ───────────────────────────────────────
     @staticmethod
@@ -127,6 +173,7 @@ class EgyptianIDOCR:
         self,
         id_card_path: str = "",
         crops: dict = None,
+        validate_consistency: bool = True,
     ) -> dict:
         """
         Extract all fields from an ID card.
@@ -137,6 +184,8 @@ class EgyptianIDOCR:
             Path to full ID card image (used if crops is None).
         crops : dict, optional
             Pre-cropped field images: {field_name: np.ndarray}.
+        validate_consistency : bool, optional
+            Run cross-field consistency validation (default: True).
         """
         if crops is None:
             img = cv2.imread(id_card_path)
@@ -154,13 +203,26 @@ class EgyptianIDOCR:
 
         results = {}
         for field_name, crop in crops.items():
-            text, conf = self.recognize(crop)
+            text, conf = self.recognize(crop, field_name=field_name)
             valid = self._validate(field_name, text)
             results[field_name] = OCRResult(
                 field=field_name,
                 text=text,
                 confidence=round(conf, 3),
                 valid=valid,
+                original_text=text,
+                corrected=False,
             )
+
+        # Cross-field consistency validation
+        if validate_consistency and self.post_processor is not None:
+            validation = self.post_processor.validate_consistency(results)
+            if not validation["valid"]:
+                for issue in validation["issues"]:
+                    # Add issue to relevant field
+                    for field_name in results:
+                        if field_name in issue:
+                            results[field_name].issues.append(issue)
+                            results[field_name].valid = False
 
         return results
