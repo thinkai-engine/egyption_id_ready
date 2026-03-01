@@ -61,12 +61,22 @@ class BakriAirLLMOCR:
                 print("   With 4-bit quantization for reduced VRAM")
         except ImportError as e:
             print(f"⚠️  AirLLM not available: {e}")
-            print("   Falling back to standard transformers with 4-bit quantization")
+            print("   Falling back to standard transformers")
+            print("   💡 Install AirLLM: pip install airllm>=2.15.0")
 
-            # Fallback: Use standard transformers with 4-bit quantization
+            # Fallback: Use standard transformers (try 4-bit if bitsandbytes available)
             from transformers import AutoModelForImageTextToText
+            
+            # Check if bitsandbytes is available
+            try:
+                import bitsandbytes
+                has_bnb = True
+            except ImportError:
+                has_bnb = False
+                print("   ⚠️  bitsandbytes not found - loading in full precision")
+                print("   💡 For 4-bit: pip install bitsandbytes>=0.46.1")
 
-            if use_4bit:
+            if use_4bit and has_bnb:
                 bnb_cfg = BitsAndBytesConfig(
                     load_in_4bit=True,
                     bnb_4bit_compute_dtype=torch.float16,
@@ -81,13 +91,73 @@ class BakriAirLLMOCR:
                 quantization_config=bnb_cfg,
                 device_map=device,
             )
-            print("✅ Using standard transformers (4-bit quantization)")
+            if bnb_cfg:
+                print("✅ Using standard transformers (4-bit quantization)")
+            else:
+                print("✅ Using standard transformers (full precision)")
+        except Exception as e:
+            print(f"⚠️  AirLLM loading failed: {e}")
+            print("   Falling back to standard transformers")
 
-        # Import processor
+            # Fallback: Use standard transformers (try 4-bit if bitsandbytes available)
+            from transformers import AutoModelForImageTextToText
+            
+            # Check if bitsandbytes is available
+            try:
+                import bitsandbytes
+                has_bnb = True
+            except ImportError:
+                has_bnb = False
+                print("   ⚠️  bitsandbytes not found - loading in full precision")
+
+            if use_4bit and has_bnb:
+                bnb_cfg = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                )
+            else:
+                bnb_cfg = None
+
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                model_name,
+                quantization_config=bnb_cfg,
+                device_map=device,
+            )
+            if bnb_cfg:
+                print("✅ Using standard transformers (4-bit quantization)")
+            else:
+                print("✅ Using standard transformers (full precision)")
+
+        # Import processor - try local cache first to avoid network timeouts
         from transformers import AutoProcessor
-        self.processor = AutoProcessor.from_pretrained(model_name)
+        
+        try:
+            # Try loading from cache first (faster, no network)
+            self.processor = AutoProcessor.from_pretrained(
+                model_name,
+                local_files_only=True,
+            )
+            print("✅ Processor loaded from cache")
+        except Exception:
+            # If not in cache, download from network
+            print("⏳ Downloading processor (this may take a moment)...")
+            self.processor = AutoProcessor.from_pretrained(model_name)
 
-        self.device_name = str(next(self.model.parameters())).device
+        # Get device name safely - handle different model types
+        try:
+            # Try to get device from model parameters
+            params_iter = self.model.parameters()
+            first_param = next(params_iter)
+            if hasattr(first_param, 'device'):
+                self.device_name = str(first_param.device).split(':')[0]
+            else:
+                self.device_name = "cuda" if torch.cuda.is_available() else "cpu"
+        except (StopIteration, AttributeError, TypeError):
+            # Fallback for models without parameters() method
+            self.device_name = "cuda" if torch.cuda.is_available() else "cpu"
+
         print(f"✅ Bakri OCR (AirLLM) ready on: {self.device_name}")
 
     def preprocess_image(self, image_path: str) -> np.ndarray:
@@ -150,7 +220,18 @@ class BakriAirLLMOCR:
             text=text,
             images=pil_img,
             return_tensors="pt",
-        ).to(self.model.device)
+        )
+
+        # Store input_ids shape before moving to device
+        input_ids_shape = inputs["input_ids"].shape[1]
+
+        # Move inputs to model device
+        if self.use_airllm:
+            # AirLLM handles device placement internally
+            pass
+        else:
+            inputs = {k: v.to(self.model.device) if hasattr(v, 'to') else v
+                     for k, v in inputs.items()}
 
         with torch.no_grad():
             out = self.model.generate(
@@ -161,7 +242,7 @@ class BakriAirLLMOCR:
             )
 
         result = self.processor.batch_decode(
-            [out[0][inputs.input_ids.shape[1]:]],
+            [out[0][input_ids_shape:]],
             skip_special_tokens=True,
         )[0].strip()
 

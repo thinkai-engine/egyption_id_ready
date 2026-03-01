@@ -205,8 +205,10 @@ python -m pytest tests/ --cov=src --cov-report=html
 | **API Server** | FastAPI | RESTful API service |
 | **Validation** | Pydantic | Data validation and serialization |
 | **Alternative OCR** | QARI-OCR (Qwen2-VL-2B) | High-accuracy Arabic OCR |
+| **Alternative OCR** | Bakri OCR (Gemma-3-4B) | Arabic legal documents OCR |
 | **Alternative OCR** | Gemini Vision | Google's multimodal API |
 | **AirLLM Labeling** | Qwen2-VL-72B (AirLLM) | 72B VLM for offline labeling on 4GB GPU |
+| **AirLLM Labeling** | Bakri AirLLM (Gemma-3-4B) | 4B VLM on 4GB GPU via layer-wise inference ⭐ |
 | **Post-Processing** | Llama-3-8B (AirLLM) | LLM-based OCR error correction |
 
 ---
