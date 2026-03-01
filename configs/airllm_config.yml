@@ -7,7 +7,7 @@
 # Model Selection
 # ---------------
 # Recommended models for different use cases:
-# 
+#
 # High-Accuracy Labeling (offline):
 #   - Qwen/Qwen2-VL-72B-Instruct  (best for Arabic OCR labeling)
 #   - meta-llama/Llama-3-70B-Instruct
@@ -16,9 +16,16 @@
 #   - meta-llama/Llama-3-8B-Instruct
 #   - mistralai/Mistral-7B-Instruct-v0.3
 #   - Qwen/Qwen2.5-7B-Instruct
+#
+# Low-VRAM Bakri OCR (Gemma-3-4B based):
+#   - bakrianoo/arabic-legal-documents-ocr-1.0
+#     Use with BakriAirLLMOCR class for layer-wise inference
 
 # Primary labeling model (for scripts/label_crops.py)
 AIRLLM_LABEL_MODEL: "Qwen/Qwen2-VL-72B-Instruct"
+
+# Bakri OCR model with AirLLM (for low VRAM GPUs)
+BAKRI_AIRLLM_MODEL: "bakrianoo/arabic-legal-documents-ocr-1.0"
 
 # Post-processing correction model (for src/inference.py)
 AIRLLM_POSTPROCESS_MODEL: "meta-llama/Llama-3-8B-Instruct"
@@ -26,6 +33,9 @@ AIRLLM_POSTPROCESS_MODEL: "meta-llama/Llama-3-8B-Instruct"
 # Cache directory for sharded model files
 # AirLLM will download and shard models here for faster loading
 AIRLLM_CACHE_DIR: "./model/airllm_cache"
+
+# Bakri AirLLM cache directory
+BAKRI_AIRLLM_CACHE_DIR: "./model/airllm_cache_bakri"
 
 # Quantization Settings
 # ---------------------
@@ -41,6 +51,9 @@ AIRLLM_USE_4BIT: false
 # Number of layers to keep in GPU memory at once (higher = faster, more VRAM)
 AIRLLM_LAYERS_PER_BATCH: 1
 
+# Bakri OCR layers per batch (Gemma-3-4B has fewer layers, can use higher value)
+BAKRI_AIRLLM_LAYERS_PER_BATCH: 2
+
 # Maximum tokens to generate
 AIRLLM_MAX_NEW_TOKENS: 128
 
@@ -55,10 +68,15 @@ AIRLLM_REPETITION_PENALTY: 1.1
 #      --airllm-model Qwen/Qwen2-VL-72B-Instruct \
 #      --airllm-cache ./model/airllm_cache
 #
-# 2. Label with 4-bit quantization (low VRAM):
-#    python scripts/label_crops.py --method airllm --use-4bit
+# 2. Label crops with Bakri OCR using AirLLM (low VRAM):
+#    python scripts/label_crops.py --method bakri-airllm \
+#      --bakri-airllm-cache ./model/airllm_cache_bakri \
+#      --layers-per-batch 2
 #
-# 3. Use in Python code:
+# 3. Label with 4-bit quantization (low VRAM):
+#    python scripts/label_crops.py --method bakri-airllm --use-4bit
+#
+# 4. Use in Python code:
 #    from src.ocr_engines.airllm_ocr import AirLLMOCR
 #    ocr = AirLLMOCR(
 #        model_name="Qwen/Qwen2-VL-72B-Instruct",
@@ -67,7 +85,17 @@ AIRLLM_REPETITION_PENALTY: 1.1
 #    )
 #    text = ocr.extract("crop.jpg", field_name="name")
 #
-# 4. Enable post-processing in inference:
+# 5. Use Bakri OCR with AirLLM in Python code:
+#    from src.ocr_engines.bakri_airllm_ocr import BakriAirLLMOCR
+#    ocr = BakriAirLLMOCR(
+#        model_name="bakrianoo/arabic-legal-documents-ocr-1.0",
+#        use_4bit=False,
+#        cache_dir="./model/airllm_cache_bakri",
+#        layers_per_batch=2
+#    )
+#    text = ocr.extract("crop.jpg", field_name="name")
+#
+# 6. Enable post-processing in inference:
 #    from src.inference import EgyptianIDOCR
 #    ocr = EgyptianIDOCR(
 #        post_process=True,

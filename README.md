@@ -87,7 +87,12 @@ This notebook:
 ### 3. Labeling and Training (02_label_and_train.ipynb)
 
 This notebook handles:
-- **Labeling**: Extract ground truth text using Gemini API or QARI-OCR
+- **Labeling**: Extract ground truth text using multiple engines:
+  - **Gemini API**: High accuracy, cloud-based
+  - **QARI-OCR**: 2B parameter VLM, local GPU
+  - **Bakri OCR**: 4B parameter VLM (Gemma-3), local GPU
+  - **Bakri AirLLM**: 4B on 4GB GPU via layer-wise inference ⭐ New
+  - **AirLLM (72B)**: Qwen2-VL-72B on 4GB GPU for highest accuracy
 - **Training**: Fine-tune PaddleOCR with GPU acceleration
 - **Checkpoints**: Model saved every 5 epochs with easy resume capability
 
@@ -332,6 +337,49 @@ ocr = AirLLMOCR(
 # Extract text from cropped field
 text = ocr.extract("crop.jpg", field_name="name")
 ```
+
+### Bakri OCR with AirLLM (4GB GPU Support) ⭐ New
+
+Run the Bakri OCR model (`bakrianoo/arabic-legal-documents-ocr-1.0`) on low VRAM GPUs:
+
+```bash
+# Basic usage (default settings)
+python scripts/label_crops.py --method bakri-airllm
+
+# With 4-bit quantization for <4GB VRAM
+python scripts/label_crops.py --method bakri-airllm --use-4bit
+
+# Tune layers per batch (higher = faster but more VRAM)
+python scripts/label_crops.py --method bakri-airllm \
+  --layers-per-batch 2 \
+  --bakri-airllm-cache ./model/airllm_cache_bakri
+```
+
+**Python API:**
+```python
+from src.ocr_engines.bakri_airllm_ocr import BakriAirLLMOCR
+
+# Load Bakri OCR on 4GB GPU
+ocr = BakriAirLLMOCR(
+    model_name="bakrianoo/arabic-legal-documents-ocr-1.0",
+    use_4bit=False,
+    cache_dir="./model/airllm_cache_bakri",
+    layers_per_batch=2,  # Adjust based on your VRAM
+)
+
+# Extract text from cropped field
+text = ocr.extract("crop.jpg", field_name="name")
+```
+
+**VRAM Requirements:**
+| Configuration | Minimum VRAM | Speed |
+|---------------|--------------|-------|
+| Bakri AirLLM (layers=4) | 8GB | ~2s/image |
+| Bakri AirLLM (layers=2) | 6GB | ~3s/image |
+| Bakri AirLLM (layers=1) | 4GB | ~5s/image |
+| Bakri AirLLM + 4-bit | 3GB | ~6s/image |
+
+> **Note:** AirLLM inference is slower than standard loading but enables running on consumer GPUs. Best for offline labeling, not real-time inference.
 
 **Post-Processing Correction:**
 ```python

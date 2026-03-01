@@ -1,13 +1,13 @@
 """
-AirLLM OCR Engine (HuggingFace + AirLLM)
-=========================================
-Extract text from cropped ID card fields using large VLMs (up to 72B params)
-on consumer GPUs via AirLLM layer-wise inference.
+Bakri OCR Engine with AirLLM
+=============================
+Extract text from cropped ID card fields using Bakri OCR
+(bakrianoo/arabic-legal-documents-ocr-1.0) with AirLLM layer-wise inference.
 
-Supports: Qwen2-VL-72B, Llama-3-70B, and other large models.
+This enables running the Gemma-3-4B based model on GPUs with as little as 4GB VRAM
+by loading layers sequentially instead of all at once.
 
-Note: Requires airllm package: pip install airllm
-If airllm fails to import, falls back to standard transformers with 4-bit quantization.
+Note: Requires airllm package: pip install airllm>=2.15.0
 """
 
 import os
@@ -17,31 +17,27 @@ from pathlib import Path
 
 from .gemini_ocr import FIELD_PROMPTS
 
-LOW_QUALITY_SUFFIX = (
-    "\nملاحظة: الصورة قد تكون غير واضحة. "
-    "اقرأ ما تستطيع وضع [؟] بدل الحروف غير الواضحة."
-)
 
-
-class AirLLMOCR:
+class BakriAirLLMOCR:
     """
-    Extract text using AirLLM with large VLMs (72B+ params).
-    Uses layer-wise inference to fit on 4GB GPU.
+    Extract text using Bakri OCR with AirLLM layer-wise inference.
+    Enables running on 4GB GPU with slower but memory-efficient inference.
 
-    Note: Best for offline labeling tasks due to slower inference speed.
+    Model: bakrianoo/arabic-legal-documents-ocr-1.0 (Gemma-3-4B based)
     """
 
     def __init__(
         self,
-        model_name: str = "Qwen/Qwen2-VL-72B-Instruct",
+        model_name: str = "bakrianoo/arabic-legal-documents-ocr-1.0",
         use_4bit: bool = False,
         device: str = "auto",
-        cache_dir: str = "./model/airllm_cache",
+        cache_dir: str = "./model/airllm_cache_bakri",
+        layers_per_batch: int = 1,
     ):
         import torch
         from transformers import BitsAndBytesConfig
 
-        print(f"⏳ Loading model {model_name}...")
+        print(f"⏳ Loading Bakri OCR {model_name} with AirLLM...")
 
         # Create cache directory for sharded model
         os.makedirs(cache_dir, exist_ok=True)
@@ -58,13 +54,18 @@ class AirLLMOCR:
                 cache_dir=cache_dir,
                 use_4bit=use_4bit,
                 device_map=device,
+                layers_per_batch=layers_per_batch,
             )
-            print("✅ Using AirLLM layer-wise inference")
+            print(f"✅ Using AirLLM layer-wise inference (layers_per_batch={layers_per_batch})")
+            if use_4bit:
+                print("   With 4-bit quantization for reduced VRAM")
         except ImportError as e:
             print(f"⚠️  AirLLM not available: {e}")
             print("   Falling back to standard transformers with 4-bit quantization")
 
             # Fallback: Use standard transformers with 4-bit quantization
+            from transformers import AutoModelForImageTextToText
+
             if use_4bit:
                 bnb_cfg = BitsAndBytesConfig(
                     load_in_4bit=True,
@@ -75,28 +76,54 @@ class AirLLMOCR:
             else:
                 bnb_cfg = None
 
-            from transformers import Qwen2VLForConditionalGeneration
-
-            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+            self.model = AutoModelForImageTextToText.from_pretrained(
                 model_name,
                 quantization_config=bnb_cfg,
                 device_map=device,
-                torch_dtype=torch.float16 if not use_4bit else None,
             )
             print("✅ Using standard transformers (4-bit quantization)")
 
-        # Import processor for Qwen2-VL
+        # Import processor
         from transformers import AutoProcessor
         self.processor = AutoProcessor.from_pretrained(model_name)
 
         self.device_name = str(next(self.model.parameters())).device
-        print(f"✅ Model ready on: {self.device_name}")
+        print(f"✅ Bakri OCR (AirLLM) ready on: {self.device_name}")
+
+    def preprocess_image(self, image_path: str) -> np.ndarray:
+        """
+        Preprocess image: resize to max 1024px width and convert to grayscale.
+        This matches the training preprocessing used in Bakri OCR.
+        """
+        img = cv2.imread(image_path)
+        if img is None:
+            raise ValueError(f"Could not load image: {image_path}")
+
+        # Resize if width > 1024
+        max_width = 1024
+        if img.shape[1] > max_width:
+            scale = max_width / img.shape[1]
+            new_width = max_width
+            new_height = int(img.shape[0] * scale)
+            img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+        # Convert to grayscale
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        return img_gray
 
     def extract(self, image_path: str, field_name: str = None) -> str:
         """Extract text from a single cropped field image."""
         import torch
-        from qwen_vl_utils import process_vision_info
+        from PIL import Image
 
+        # Preprocess image (resize + grayscale as per Bakri training)
+        img_gray = self.preprocess_image(image_path)
+
+        # Convert to PIL Image for processor
+        pil_img = Image.fromarray(img_gray)
+
+        # Build prompt based on field type
         if field_name and field_name in FIELD_PROMPTS:
             prompt = (
                 f"أنت نظام OCR متخصص في بطاقات الهوية المصرية.\n"
@@ -109,26 +136,26 @@ class AirLLMOCR:
         messages = [{
             "role": "user",
             "content": [
-                {"type": "image", "image": f"file://{image_path}"},
+                {"type": "image", "image": pil_img},
                 {"type": "text", "text": prompt},
             ],
         }]
 
+        # Apply chat template and process
         text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
-        img_in, vid_in = process_vision_info(messages)
+
         inputs = self.processor(
-            text=[text],
-            images=img_in,
-            videos=vid_in,
+            text=text,
+            images=pil_img,
             return_tensors="pt",
         ).to(self.model.device)
 
         with torch.no_grad():
             out = self.model.generate(
                 **inputs,
-                max_new_tokens=128,
+                max_new_tokens=256,
                 do_sample=False,
                 repetition_penalty=1.1,
             )
@@ -157,15 +184,15 @@ class AirLLMOCR:
         base_dir: str,
     ):
         """
-        Label all unlabeled crops using AirLLM.
+        Label all unlabeled crops using Bakri OCR with AirLLM.
         Modifies DataFrame in place.
-        
-        Note: Slower than QARI-OCR but higher accuracy for large models.
+
+        Note: AirLLM inference is slower but enables low VRAM usage.
         """
         from tqdm import tqdm
 
         unlabeled = crops_df[crops_df["label_text"] == ""]
-        print(f"🤖 Processing {len(unlabeled)} crops with AirLLM (72B)...")
+        print(f"🤖 Processing {len(unlabeled)} crops with Bakri OCR (AirLLM)...")
 
         for idx, row in tqdm(unlabeled.iterrows(), total=len(unlabeled)):
             img_path = Path(base_dir) / row["image_path"]
