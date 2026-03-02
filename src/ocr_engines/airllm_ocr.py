@@ -81,7 +81,7 @@ class AirLLMOCR:
                 model_name,
                 quantization_config=bnb_cfg,
                 device_map=device,
-                torch_dtype=torch.float16 if not use_4bit else None,
+                dtype=torch.float16 if not use_4bit else None,
             )
             print("✅ Using standard transformers (4-bit quantization)")
 

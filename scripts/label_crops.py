@@ -6,6 +6,7 @@ Usage:
     python scripts/label_crops.py --method gemini
     python scripts/label_crops.py --method bakri
     python scripts/label_crops.py --method bakri-airllm   # Bakri with AirLLM (low VRAM)
+    python scripts/label_crops.py --method qari-airllm    # QARI with AirLLM (low VRAM)
     python scripts/label_crops.py --method airllm         # AirLLM (72B model)
     python scripts/label_crops.py --method both
 """
@@ -39,6 +40,9 @@ def extract_text(img_path, field, method, engines):
     elif method == "bakri-airllm":
         result["label_text"] = engines["bakri_airllm"].extract(str(img_path), field)
 
+    elif method == "qari-airllm":
+        result["label_text"] = engines["qari_airllm"].extract(str(img_path), field)
+
     elif method == "airllm":
         result["label_text"] = engines["airllm"].extract(str(img_path), field)
 
@@ -56,7 +60,7 @@ def extract_text(img_path, field, method, engines):
 def main():
     parser = argparse.ArgumentParser(description="Label crops with OCR")
     parser.add_argument(
-        "--method", choices=["qari", "gemini", "bakri", "bakri-airllm", "airllm", "both"],
+        "--method", choices=["qari", "gemini", "bakri", "bakri-airllm", "qari-airllm", "airllm", "both"],
         default="qari", help="OCR engine to use"
     )
     parser.add_argument(
@@ -81,6 +85,10 @@ def main():
     parser.add_argument(
         "--bakri-airllm-cache", default="./model/airllm_cache_bakri",
         help="Cache directory for Bakri AirLLM sharded model"
+    )
+    parser.add_argument(
+        "--qari-airllm-cache", default="./model/airllm_cache_qari",
+        help="Cache directory for QARI AirLLM sharded model"
     )
     parser.add_argument(
         "--layers-per-batch", type=int, default=1,
@@ -155,6 +163,15 @@ def main():
             layers_per_batch=args.layers_per_batch,
         )
 
+    if args.method in ("qari-airllm",):
+        from src.ocr_engines.qari_airllm_ocr import QariAirLLMOCR
+        engines["qari_airllm"] = QariAirLLMOCR(
+            model_name="NAMAA-Space/Qari-OCR-0.1-VL-2B-Instruct",
+            use_4bit=args.use_4bit,
+            cache_dir=args.qari_airllm_cache,
+            layers_per_batch=args.layers_per_batch,
+        )
+
     # ── Process ───────────────────────────────────────────────
     for idx, row in tqdm(subset.iterrows(), total=len(subset)):
         img_path = ROOT / row["image_path"]
@@ -182,7 +199,7 @@ def main():
         # Rate limit for Gemini and AirLLM (slower inference)
         if args.method in ("gemini", "both"):
             time.sleep(0.4)
-        elif args.method in ("airllm", "bakri-airllm"):
+        elif args.method in ("airllm", "bakri-airllm", "qari-airllm"):
             time.sleep(0.1)  # Small delay for layer-wise inference
 
     # ── Final save ────────────────────────────────────────────

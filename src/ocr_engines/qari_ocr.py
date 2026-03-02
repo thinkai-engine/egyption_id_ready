@@ -60,7 +60,7 @@ class QariOCR:
             self.model = Qwen2VLForConditionalGeneration.from_pretrained(
                 model_name,
                 config=config,
-                torch_dtype=torch.float16,
+                dtype=torch.float16,
                 device_map=device,
             )
 

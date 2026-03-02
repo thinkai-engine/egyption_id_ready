@@ -209,6 +209,7 @@ python -m pytest tests/ --cov=src --cov-report=html
 | **Alternative OCR** | Gemini Vision | Google's multimodal API |
 | **AirLLM Labeling** | Qwen2-VL-72B (AirLLM) | 72B VLM for offline labeling on 4GB GPU |
 | **AirLLM Labeling** | Bakri AirLLM (Gemma-3-4B) | 4B VLM on 4GB GPU via layer-wise inference ⭐ |
+| **AirLLM Labeling** | QARI AirLLM (Qwen2-VL-2B) | 2B VLM on 4GB GPU via layer-wise inference ⭐ |
 | **Post-Processing** | Llama-3-8B (AirLLM) | LLM-based OCR error correction |
 
 ---
@@ -382,6 +383,49 @@ text = ocr.extract("crop.jpg", field_name="name")
 | Bakri AirLLM + 4-bit | 3GB | ~6s/image |
 
 > **Note:** AirLLM inference is slower than standard loading but enables running on consumer GPUs. Best for offline labeling, not real-time inference.
+
+### QARI-OCR with AirLLM (4GB GPU Support) ⭐ New
+
+Run the QARI-OCR model (`NAMAA-Space/Qari-OCR-0.1-VL-2B-Instruct`) on low VRAM GPUs:
+
+```bash
+# Basic usage (default settings)
+python scripts/label_crops.py --method qari-airllm
+
+# With 4-bit quantization for <4GB VRAM
+python scripts/label_crops.py --method qari-airllm --use-4bit
+
+# Tune layers per batch (higher = faster but more VRAM)
+python scripts/label_crops.py --method qari-airllm \
+  --layers-per-batch 2 \
+  --qari-airllm-cache ./model/airllm_cache_qari
+```
+
+**Python API:**
+```python
+from src.ocr_engines.qari_airllm_ocr import QariAirLLMOCR
+
+# Load QARI-OCR on 4GB GPU
+ocr = QariAirLLMOCR(
+    model_name="NAMAA-Space/Qari-OCR-0.1-VL-2B-Instruct",
+    use_4bit=False,
+    cache_dir="./model/airllm_cache_qari",
+    layers_per_batch=2,  # Adjust based on your VRAM
+)
+
+# Extract text from cropped field
+text = ocr.extract("crop.jpg", field_name="name")
+```
+
+**VRAM Requirements:**
+| Configuration | Minimum VRAM | Speed |
+|---------------|--------------|-------|
+| QARI AirLLM (layers=4) | 6GB | ~1.5s/image |
+| QARI AirLLM (layers=2) | 4GB | ~2.5s/image |
+| QARI AirLLM (layers=1) | 3GB | ~4s/image |
+| QARI AirLLM + 4-bit | 2GB | ~5s/image |
+
+> **Note:** QARI-OCR is optimized for Arabic text and Egyptian ID cards. AirLLM inference is slower than standard loading but enables running on consumer GPUs. Best for offline labeling, not real-time inference.
 
 **Post-Processing Correction:**
 ```python
