@@ -6,6 +6,8 @@ Two-stage YOLO detection for Egyptian ID cards:
 2. Detect fields within the cropped card
 
 This improves accuracy by removing background noise and focusing on the card region.
+
+Supports both NASO7Y model classes and project's original label format.
 """
 
 import cv2
@@ -20,6 +22,13 @@ try:
 except ImportError:
     HAS_ULTRALYTICS = False
     print("⚠️  ultralytics not installed. Install with: pip install ultralytics")
+
+from .class_mapping import (
+    get_naso7y_valid_classes,
+    get_project_valid_classes,
+    translate_class_name,
+    ClassMapper,
+)
 
 
 @dataclass
@@ -273,38 +282,109 @@ class CardDetector:
 
         return detections
     
-    def detect_full(self, image: np.ndarray) -> Tuple[np.ndarray, Dict[str, Tuple[np.ndarray, float]]]:
+    def detect_full(
+        self,
+        image: np.ndarray,
+        output_format: str = "naso7y",
+        translate_to_project: bool = False,
+    ) -> Tuple[np.ndarray, Dict[str, Tuple[np.ndarray, float]]]:
         """
         Run full two-stage detection pipeline.
-        
+
         Args:
             image: Input image (BGR format)
-            
+            output_format: Output format ('naso7y' or 'project')
+            translate_to_project: If True, translate NASO7Y classes to project format
+
         Returns:
             Tuple of (card_image, fields_dict)
             fields_dict: {field_name: (field_crop, confidence)}
         """
         # Stage 1: Detect and crop card
         card_image, card_det = self.detect_card(image)
-        
+
         # Stage 2: Detect fields
-        field_dets = self.detect_fields(card_image)
-        
+        field_dets = self.detect_fields(card_image, valid_only=True)
+
         # Extract field crops
         fields = {}
         for det in field_dets:
             x1, y1, x2, y2 = det.bbox
             h, w = card_image.shape[:2]
-            
+
             # Clamp to image bounds
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(w, x2), min(h, y2)
-            
+
             if x2 > x1 and y2 > y1:
                 field_crop = card_image[y1:y2, x1:x2]
-                fields[det.class_name] = (field_crop, det.confidence)
-        
+                
+                # Translate class name if requested
+                class_name = det.class_name
+                if translate_to_project:
+                    translated = translate_class_name(class_name, 'naso7y', 'project')
+                    if translated:
+                        class_name = translated
+                    else:
+                        # Skip fields without project equivalent
+                        continue
+                
+                # Handle duplicate field names (e.g., firstName + lastName → name)
+                if class_name in fields:
+                    # Merge with existing (average confidence)
+                    existing_crop, existing_conf = fields[class_name]
+                    new_conf = (existing_conf + det.confidence) / 2
+                    fields[class_name] = (existing_crop, new_conf)
+                else:
+                    fields[class_name] = (field_crop, det.confidence)
+
         return card_image, fields
+
+    def detect_full_with_mapping(
+        self,
+        image: np.ndarray,
+    ) -> Tuple[np.ndarray, Dict[str, Tuple[np.ndarray, float]], Dict[str, str]]:
+        """
+        Run detection and return both NASO7Y and project format mappings.
+
+        Args:
+            image: Input image (BGR format)
+
+        Returns:
+            Tuple of (card_image, fields_dict, mapping_dict)
+            fields_dict: {field_name: (field_crop, confidence)}
+            mapping_dict: {naso7y_name: project_name} for detected fields
+        """
+        # Stage 1: Detect and crop card
+        card_image, card_det = self.detect_card(image)
+
+        # Stage 2: Detect fields
+        field_dets = self.detect_fields(card_image, valid_only=True)
+
+        # Extract field crops with both formats
+        fields = {}
+        mapping = {}
+        
+        for det in field_dets:
+            x1, y1, x2, y2 = det.bbox
+            h, w = card_image.shape[:2]
+
+            # Clamp to image bounds
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+
+            if x2 > x1 and y2 > y1:
+                field_crop = card_image[y1:y2, x1:x2]
+                
+                # Store with NASO7Y name
+                fields[det.class_name] = (field_crop, det.confidence)
+                
+                # Get project equivalent
+                project_name = translate_class_name(det.class_name, 'naso7y', 'project')
+                if project_name:
+                    mapping[det.class_name] = project_name
+
+        return card_image, fields, mapping
 
 
 def load_card_detector(

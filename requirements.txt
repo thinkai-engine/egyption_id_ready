@@ -30,6 +30,13 @@ qwen_vl_utils==0.0.8
 json-repair>=0.30.0
 bitsandbytes>=0.46.1
 airllm>=2.11.0
+
+# ── Two-Stage Detection (YOLO) ────────────────────
+# NASO7Y Egyptian ID OCR models
+# Download weights: python scripts/download_weights.py
+ultralytics>=8.0.0        # YOLOv8 for card and field detection
+easyocr>=1.7.0            # Fallback OCR engine
+
 # ── Training (PaddleOCR) ─────────────────────────
 paddlepaddle-gpu==2.6.2
 paddleocr==2.9.1
@@ -38,3 +45,9 @@ onnxsim==0.4.36
 
 # ── Testing ───────────────────────────────────────
 pytest==8.3.3
+
+# ── Jupyter Notebooks ─────────────────────────────
+# For running notebooks (optional)
+jupyter>=1.0.0
+ipywidgets>=7.0.0
+matplotlib>=3.5.0
