@@ -20,14 +20,16 @@ python-multipart==0.0.9
 
 # ── OCR Engines ───────────────────────────────────
 google-generativeai==0.8.3
-transformers>=4.57.0
+transformers>=4.49
+optimum<2.0
+sentencepiece==0.2.1
 torch>=2.6.0
 accelerate>=1.0.0
 peft>=0.18.0
 qwen_vl_utils==0.0.8
 json-repair>=0.30.0
 bitsandbytes>=0.46.1
-airllm==2.3.0
+airllm>=2.11.0
 # ── Training (PaddleOCR) ─────────────────────────
 paddlepaddle-gpu==2.6.2
 paddleocr==2.9.1
