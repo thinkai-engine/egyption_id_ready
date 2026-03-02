@@ -106,19 +106,19 @@ class QariAirLLMOCR:
                     bnb_4bit_use_double_quant=True,
                     bnb_4bit_quant_type="nf4",
                 )
-            else:
-                bnb_cfg = None
-
-            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-                model_name,
-                quantization_config=bnb_cfg,
-                device_map="auto" if has_cuda else None,
-                dtype=torch.float16 if has_cuda and not bnb_cfg else None,
-            )
-
-            if bnb_cfg:
+                self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                    model_name,
+                    quantization_config=bnb_cfg,
+                    device_map="auto",
+                )
                 print("✅ Using standard transformers (4-bit quantization)")
             else:
+                # Full precision loading
+                self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16 if has_cuda else torch.float32,
+                    device_map="auto" if has_cuda else None,
+                )
                 print("✅ Using standard transformers (full precision)")
         except Exception as e:
             print(f"⚠️  AirLLM loading failed: {e}")
@@ -188,7 +188,10 @@ class QariAirLLMOCR:
     def extract(self, image_path: str, field_name: str = None) -> str:
         """Extract text from a single cropped field image."""
         import torch
-        from qwen_vl_utils import process_vision_info
+        from PIL import Image
+
+        # Load image with PIL
+        pil_img = Image.open(image_path).convert("RGB")
 
         if field_name and field_name in FIELD_PROMPTS:
             prompt = (
@@ -202,7 +205,7 @@ class QariAirLLMOCR:
         messages = [{
             "role": "user",
             "content": [
-                {"type": "image", "image": f"file://{image_path}"},
+                {"type": "image", "image": pil_img},
                 {"type": "text", "text": prompt},
             ],
         }]
@@ -212,11 +215,9 @@ class QariAirLLMOCR:
             messages, tokenize=False, add_generation_prompt=True
         )
 
-        img_in, vid_in = process_vision_info(messages)
         inputs = self.processor(
-            text=[text],
-            images=img_in,
-            videos=vid_in,
+            text=text,
+            images=pil_img,
             return_tensors="pt",
         )
 

@@ -101,19 +101,19 @@ class BakriAirLLMOCR:
                     bnb_4bit_use_double_quant=True,
                     bnb_4bit_quant_type="nf4",
                 )
-            else:
-                bnb_cfg = None
-
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                model_name,
-                quantization_config=bnb_cfg,
-                device_map="auto" if has_cuda else None,
-                dtype=torch.float16 if has_cuda and not bnb_cfg else None,
-            )
-            
-            if bnb_cfg:
+                self.model = AutoModelForImageTextToText.from_pretrained(
+                    model_name,
+                    quantization_config=bnb_cfg,
+                    device_map="auto",
+                )
                 print("✅ Using standard transformers (4-bit quantization)")
             else:
+                # Full precision loading - Bakri OCR uses bfloat16
+                self.model = AutoModelForImageTextToText.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.bfloat16 if has_cuda else torch.float32,
+                    device_map="auto" if has_cuda else None,
+                )
                 print("✅ Using standard transformers (full precision)")
         except Exception as e:
             print(f"⚠️  AirLLM loading failed: {e}")
