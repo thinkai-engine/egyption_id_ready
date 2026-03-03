@@ -214,7 +214,7 @@ class BakriAirLLMOCR:
         pil_img = Image.fromarray(img_gray)
 
         # Build prompt based on field type
-        if field_name and field_name in FIELD_PROMPTS:
+        if field_name in FIELD_PROMPTS:
             prompt = (
                 f"أنت نظام OCR متخصص في بطاقات الهوية المصرية.\n"
                 f"{FIELD_PROMPTS[field_name]}\n"

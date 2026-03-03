@@ -12,11 +12,12 @@ ID Card Image → YOLO Detection → Field Cropping → PaddleOCR Recognition �
 
 - **GPU Acceleration**: 10x faster training with **checkpoint** support and resume capability
 - **Modular Architecture**: Clean, maintainable code with separated OCR engines (Gemini/QARI/AirLLM)
-- **Interactive Notebooks**: 3 Jupyter notebooks covering the complete pipeline from image cropping to training and evaluation
+- **Interactive Notebooks**: 4 Jupyter notebooks + **Google Colab** support for cloud execution
 - **Production Ready**: ~17ms per field using ONNX Runtime on CPU
 - **24 Supported Fields**: Name, National ID, Address, Governorate, Religion, Marital Status, Profession, and more
 - **Ready-to-Use API**: FastAPI with 5 endpoints + Docker deployment support
 - **AirLLM Integration**: Label with 72B parameter VLMs on 4GB GPU (offline labeling)
+- **☁️ Google Colab Ready**: Complete pipeline runnable on free Colab GPU
 
 ---
 
@@ -37,24 +38,88 @@ egyption_id_ready/
 ├── notebooks/              # Interactive Jupyter Notebooks
 │   ├── 01_build_dataset.ipynb   # Field cropping + quality analysis
 │   ├── 02_label_and_train.ipynb # Text extraction + model training
-│   └── 03_evaluate_and_deploy.ipynb # Evaluation + ONNX export + API
+│   ├── 03_evaluate_and_deploy.ipynb # Evaluation + ONNX export + API
+│   ├── 04_two_stage_detection.ipynb # Two-stage YOLO detection
+│   └── Egyptian_ID_OCR_Full_Colab.ipynb # ☁️ Complete Colab notebook
 │
 ├── scripts/                # Automation scripts
 │   ├── build_dataset.py    # Batch image processing and cropping
 │   ├── label_crops.py      # Automatic text extraction (Gemini/QARI/AirLLM)
 │   ├── prepare_paddle_labels.py # Training data preparation
 │   ├── train.sh            # Training execution (PaddleOCR)
-│   └── export_onnx.sh      # Model export to ONNX
+│   ├── export_onnx.sh      # Model export to ONNX
+│   ├── download_weights.py # Download YOLO models
+│   ├── download_models.py  # Download OCR models
+│   └── create_colab_notebook.py # Generate Colab notebook
 │
 ├── configs/                # Model configurations (YAML)
 │   ├── egyptian_id_rec.yml # PaddleOCR training config
 │   └── airllm_config.yml   # AirLLM model settings
+├── docs/                   # Documentation
+│   ├── COLAB_SETUP.md            # ☁️ Colab setup guide
+│   ├── COLAB_NOTEBOOK_SUMMARY.md # ☁️ Colab notebook summary
+│   ├── CLASS_MAPPING.md          # Class mapping reference
+│   ├── NASO7Y_CLASSES.md         # NASO7Y model classes
+│   ├── NOTEBOOKS_GUIDE.md        # Notebooks usage guide
+│   ├── PROCESSING_RESULTS.md     # Dataset processing results
+│   ├── TWO_STAGE_DETECTION.md    # Two-stage detection guide
+│   ├── BAKRI_AIRLLM_INTEGRATION.md # Bakri AirLLM integration
+│   └── bakri_airllm_usage.md     # Bakri AirLLM usage
 ├── app/                    # API server (FastAPI)
 ├── tests/                  # Automated tests (15 tests)
 ├── model/                  # Model files (field_detector.onnx)
 ├── model/airllm_cache/     # AirLLM sharded model cache
 └── onnx/                   # Exported ONNX OCR models
 ```
+
+---
+
+## ☁️ Google Colab Setup
+
+**Run the complete pipeline on Google Colab with free GPU!**
+
+### Quick Start
+
+1. **Upload Notebook to Colab:**
+   - Go to [Google Colab](https://colab.research.google.com/)
+   - Upload `notebooks/Egyptian_ID_OCR_Full_Colab.ipynb`
+   - Select **Runtime** → **Change runtime type** → **GPU**
+
+2. **Update Configuration:**
+   - Replace `YOUR_DATASET_FILE_ID_HERE` with your Google Drive file ID
+   - Update git clone URL to your repository
+
+3. **Run All Cells:**
+   - Execute cells sequentially
+   - Total time: ~4-8 hours (mostly training)
+
+### What's Included
+
+- ✅ Automatic model downloads (YOLO + OCR)
+- ✅ Dataset download from Google Drive
+- ✅ Two-stage detection processing
+- ✅ OCR labeling (multiple methods)
+- ✅ PaddleOCR training with checkpoints
+- ✅ Model evaluation & ONNX export
+- ✅ Automatic backup to Google Drive
+
+### Documentation
+
+- **Full Guide:** [`docs/COLAB_SETUP.md`](docs/COLAB_SETUP.md)
+- **Summary:** [`docs/COLAB_NOTEBOOK_SUMMARY.md`](docs/COLAB_NOTEBOOK_SUMMARY.md)
+- **Notebook:** [`notebooks/Egyptian_ID_OCR_Full_Colab.ipynb`](notebooks/Egyptian_ID_OCR_Full_Colab.ipynb)
+
+### Expected Results
+
+| Metric | Value |
+|--------|-------|
+| Dataset Processing | 57,685 crops (10 min) |
+| OCR Labeling | 30-60 min |
+| Training (100 epochs) | 2-4 hours |
+| CER (Character Error) | < 5% |
+| WER (Word Error) | < 8% |
+
+**Recommended for Colab Free Tier:** Use `qari-airllm` or `bakri-airllm` for OCR labeling
 
 ---
 
